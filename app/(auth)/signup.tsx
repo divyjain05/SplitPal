@@ -27,7 +27,7 @@ export default function Signup() {
       return;
     }
 
-    if (password.length < 4) {
+    if (password.length < 6) {
       Alert.alert('Validation Error', 'Password must be at least 4 characters long.');
       return;
     }
@@ -144,7 +144,7 @@ export default function Signup() {
           </View>
 
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Password</Text>
+            <Text style={styles.label}>Password (min 4 chars)</Text>
             <TextInput
               style={styles.input}
               onChangeText={setPassword}
