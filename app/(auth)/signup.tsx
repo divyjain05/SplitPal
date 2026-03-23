@@ -14,24 +14,46 @@ import { supabase } from '@/lib/supabase';
 import { router } from 'expo-router';
 
 export default function Signup() {
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
   async function signUpWithEmail() {
+    if (!name || !email || !password || !confirmPassword) {
+      Alert.alert('Validation Error', 'Please fill in all fields.');
+      return;
+    }
+
+    if (password.length < 4) {
+      Alert.alert('Validation Error', 'Password must be at least 4 characters long.');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      Alert.alert('Validation Error', 'Passwords do not match.');
+      return;
+    }
+
     setLoading(true);
     const { data, error } = await supabase.auth.signUp({
       email: email,
       password: password,
+      options: {
+        data: {
+          full_name: name,
+        }
+      }
     });
 
     if (error) {
       Alert.alert('Sign Up Failed', error.message);
     } else {
+      Alert.alert('Success', 'Account created successfully!');
       if (data?.session) {
         router.replace('/(tabs)');
       } else {
-        Alert.alert('Success', 'Please check your inbox for email verification!');
         router.push('/(auth)/login');
       }
     }
@@ -50,6 +72,18 @@ export default function Signup() {
         </View>
 
         <View style={styles.formContainer}>
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Full Name</Text>
+            <TextInput
+              style={styles.input}
+              onChangeText={setName}
+              value={name}
+              placeholder="John Doe"
+              placeholderTextColor="#64748b"
+              autoCapitalize="words"
+            />
+          </View>
+
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Email Address</Text>
             <TextInput
@@ -70,6 +104,19 @@ export default function Signup() {
               style={styles.input}
               onChangeText={setPassword}
               value={password}
+              placeholder="••••••••"
+              placeholderTextColor="#64748b"
+              secureTextEntry
+              autoCapitalize="none"
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Confirm Password</Text>
+            <TextInput
+              style={styles.input}
+              onChangeText={setConfirmPassword}
+              value={confirmPassword}
               placeholder="••••••••"
               placeholderTextColor="#64748b"
               secureTextEntry
