@@ -15,13 +15,14 @@ import { router } from 'expo-router';
 
 export default function Signup() {
   const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
   async function signUpWithEmail() {
-    if (!name || !email || !password || !confirmPassword) {
+    if (!name || !username || !email || !password || !confirmPassword) {
       Alert.alert('Validation Error', 'Please fill in all fields.');
       return;
     }
@@ -37,24 +38,55 @@ export default function Signup() {
     }
 
     setLoading(true);
+
+    const { data: existingUser, error: usernameError } = await supabase
+      .from('profiles')
+      .select('username')
+      .eq('username', username)
+      .maybeSingle();
+
+    if (usernameError) {
+      Alert.alert('Error', 'Failed to verify username uniqueness');
+      setLoading(false);
+      return;
+    }
+
+    if (existingUser) {
+      Alert.alert('Validation Error', 'Username is already taken.');
+      setLoading(false);
+      return;
+    }
+
     const { data, error } = await supabase.auth.signUp({
       email: email,
       password: password,
       options: {
         data: {
           full_name: name,
+          username: username,
         }
       }
     });
 
     if (error) {
       Alert.alert('Sign Up Failed', error.message);
-    } else {
-      Alert.alert('Success', 'Account created successfully!');
-      if (data?.session) {
-        router.replace('/(tabs)');
+    } else if (data.user) {
+      const { error: profileError } = await supabase.from('profiles').insert({
+        id: data.user.id,
+        username: username,
+        email: email,
+        full_name: name
+      });
+
+      if (profileError) {
+        Alert.alert('Profile Error', 'Account created, but failed to save profile: ' + profileError.message);
       } else {
-        router.push('/(auth)/login');
+        Alert.alert('Success', 'Account created successfully!');
+        if (data?.session) {
+          router.replace('/(tabs)');
+        } else {
+          router.push('/(auth)/login');
+        }
       }
     }
     setLoading(false);
@@ -81,6 +113,19 @@ export default function Signup() {
               placeholder="John Doe"
               placeholderTextColor="#64748b"
               autoCapitalize="words"
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Username</Text>
+            <TextInput
+              style={styles.input}
+              onChangeText={setUsername}
+              value={username}
+              placeholder="cooluser123"
+              placeholderTextColor="#64748b"
+              autoCapitalize="none"
+              autoCorrect={false}
             />
           </View>
 

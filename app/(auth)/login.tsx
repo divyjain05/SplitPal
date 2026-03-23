@@ -14,14 +14,31 @@ import { supabase } from '@/lib/supabase';
 import { router } from 'expo-router';
 
 export default function Login() {
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
   async function signInWithEmail() {
     setLoading(true);
+    let loginEmail = identifier;
+
+    if (!identifier.includes('@')) {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('username', identifier)
+        .maybeSingle();
+      
+      if (error || !data || !data.email) {
+        Alert.alert('Error', 'Username not found');
+        setLoading(false);
+        return;
+      }
+      loginEmail = data.email;
+    }
+
     const { error } = await supabase.auth.signInWithPassword({
-      email: email,
+      email: loginEmail,
       password: password,
     });
 
@@ -46,16 +63,17 @@ export default function Login() {
 
         <View style={styles.formContainer}>
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Email Address</Text>
+            <Text style={styles.label}>Email Address or Username</Text>
             <TextInput
               style={styles.input}
-              onChangeText={setEmail}
-              value={email}
-              placeholder="name@example.com"
+              onChangeText={setIdentifier}
+              value={identifier}
+              placeholder="name@example.com or username"
               placeholderTextColor="#64748b"
               autoCapitalize="none"
-              keyboardType="email-address"
+              keyboardType="default"
               autoComplete="email"
+              autoCorrect={false}
             />
           </View>
 
