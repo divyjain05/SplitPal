@@ -16,11 +16,20 @@ export default function AddExpenseModal({ visible, groupId, members, onClose, on
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
   const [paidBy, setPaidBy] = useState<string | null>(null);
+  const [paidFor, setPaidFor] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const colorScheme = useColorScheme();
 
+  const handleTogglePaidFor = (memberId: string) => {
+    if (paidFor.includes(memberId)) {
+      setPaidFor(paidFor.filter(id => id !== memberId));
+    } else {
+      setPaidFor([...paidFor, memberId]);
+    }
+  };
+
   const handleCreate = async () => {
-    if (!title.trim() || !amount.trim() || !paidBy) return;
+    if (!title.trim() || !amount.trim() || !paidBy || paidFor.length === 0) return;
     const numericAmount = parseFloat(amount);
     if (isNaN(numericAmount) || numericAmount <= 0) return;
 
@@ -44,12 +53,12 @@ export default function AddExpenseModal({ visible, groupId, members, onClose, on
       return;
     }
 
-    // 2. Insert Split Logic (Equal Split for everyone in the group)
-    const perPersonShare = numericAmount / members.length;
+    // 2. Insert Split Logic (Only among those who are selected in Paid For)
+    const perPersonShare = numericAmount / paidFor.length;
     
-    const splits = members.map(m => ({
+    const splits = paidFor.map(memberId => ({
       expense_id: expense.id,
-      member_id: m.id,
+      member_id: memberId,
       amount_owed: perPersonShare
     }));
 
@@ -65,8 +74,11 @@ export default function AddExpenseModal({ visible, groupId, members, onClose, on
     setTitle('');
     setAmount('');
     setPaidBy(null);
+    setPaidFor([]);
     onSuccess();
   };
+
+  const isFormValid = title.trim() && amount.trim() && paidBy && paidFor.length > 0;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -98,11 +110,27 @@ export default function AddExpenseModal({ visible, groupId, members, onClose, on
             {members.length === 0 && <ThemedText style={{color: '#888'}}>No members in group.</ThemedText>}
             {members.map(m => (
               <TouchableOpacity
-                key={m.id}
+                key={`by-${m.id}`}
                 style={[styles.memberPill, paidBy === m.id && styles.memberPillActive]}
                 onPress={() => setPaidBy(m.id)}
               >
                 <ThemedText style={[styles.memberPillText, paidBy === m.id && styles.memberPillTextActive]}>
+                  {m.name}
+                </ThemedText>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          <ThemedText style={styles.label}>Paid For</ThemedText>
+          <ScrollView style={styles.membersList} horizontal showsHorizontalScrollIndicator={false}>
+            {members.length === 0 && <ThemedText style={{color: '#888'}}>No members in group.</ThemedText>}
+            {members.map(m => (
+              <TouchableOpacity
+                key={`for-${m.id}`}
+                style={[styles.memberPill, paidFor.includes(m.id) && styles.memberPillActiveMulti]}
+                onPress={() => handleTogglePaidFor(m.id)}
+              >
+                <ThemedText style={[styles.memberPillText, paidFor.includes(m.id) && styles.memberPillTextActive]}>
                   {m.name}
                 </ThemedText>
               </TouchableOpacity>
@@ -115,9 +143,9 @@ export default function AddExpenseModal({ visible, groupId, members, onClose, on
             </TouchableOpacity>
 
             <TouchableOpacity 
-              style={[styles.createButton, (!title.trim() || !amount.trim() || !paidBy || members.length === 0) && styles.createButtonDisabled]}
+              style={[styles.createButton, !isFormValid && styles.createButtonDisabled]}
               onPress={handleCreate}
-              disabled={!title.trim() || !amount.trim() || !paidBy || members.length === 0 || loading}
+              disabled={!isFormValid || loading}
             >
               {loading ? (
                 <ActivityIndicator color="#fff" size="small" />
@@ -171,7 +199,7 @@ const styles = StyleSheet.create({
   },
   membersList: {
     flexDirection: 'row',
-    marginBottom: 32,
+    marginBottom: 20,
   },
   memberPill: {
     paddingHorizontal: 16,
@@ -181,7 +209,10 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   memberPillActive: {
-    backgroundColor: '#10b981',
+    backgroundColor: '#10B981', // Solid teal/green for singles
+  },
+  memberPillActiveMulti: {
+    backgroundColor: '#3b82f6', // Solid blue to differentiate 'Paid For' multi-selection
   },
   memberPillText: {
     fontWeight: '500',
@@ -194,6 +225,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-end',
     gap: 12,
+    marginTop: 10,
   },
   cancelButton: {
     paddingVertical: 12,
@@ -214,7 +246,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   createButtonDisabled: {
-    backgroundColor: '#a7f3d0',
+    opacity: 0.5,
   },
   createButtonText: {
     color: '#ffffff',

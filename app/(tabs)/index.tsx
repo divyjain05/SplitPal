@@ -63,46 +63,43 @@ export default function HomeScreen() {
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top }]}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        
+        {/* Header Section */}
         <View style={styles.header}>
-            <ThemedText type="title" style={{color: '#1E293B', fontWeight: '800', fontSize: 24}}>Dashboard</ThemedText>
-            <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-              <ThemedText style={styles.logoutText}>Logout</ThemedText>
-              <Ionicons name="log-out-outline" size={18} color="#64748B" />
-            </TouchableOpacity>
+          <View style={styles.logoContainer}>
+            <Ionicons name="wallet-outline" size={30} color="#1D8A78" />
+            <ThemedText style={styles.logoText}>SplitPal</ThemedText>
+          </View>
+          <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+            <Ionicons name="log-out-outline" size={20} color="#64748B" />
+            <ThemedText style={styles.logoutText}>Logout</ThemedText>
+          </TouchableOpacity>
         </View>
 
         {/* Monthly Expenditure Box */}
         <LinearGradient 
-          colors={['#10B981', '#2DD4BF']} 
+          colors={['#4ABEA9', '#1C9381']} 
           start={{ x: 0, y: 0 }} 
           end={{ x: 1, y: 1 }} 
           style={styles.expenditureBox}
         >
-          <View style={styles.expenditureInner}>
-            <View>
-              <ThemedText style={styles.expenditureLabel}>Total Monthly Expenses</ThemedText>
-              <ThemedText style={styles.expenditureAmount}>₹4,486.00</ThemedText>
-              <ThemedText style={styles.expenditureDate}>March 2026</ThemedText>
-            </View>
+          <ThemedText style={styles.expenditureLabel}>Total Monthly Expenses</ThemedText>
+          <ThemedText style={styles.expenditureAmount}>₹2,140.00</ThemedText>
+          <ThemedText style={styles.expenditureDate}>April 2026</ThemedText>
+          <View style={styles.heroSpacer} />
+          <View style={styles.heroIconBoxContainer}>
             <View style={styles.heroIconBox}>
-              <Ionicons name="wallet-outline" size={38} color="#ffffff" />
+              <Ionicons name="wallet-outline" size={34} color="#ffffff" />
             </View>
           </View>
         </LinearGradient>
 
         {/* My Groups Header */}
         <View style={styles.groupsHeader}>
-          <ThemedText type="subtitle" style={styles.groupsTitle}>My Groups</ThemedText>
+          <ThemedText style={styles.groupsTitle}>My Groups</ThemedText>
           <TouchableOpacity style={styles.addGroupButton} onPress={() => setModalVisible(true)}>
-            <LinearGradient
-              colors={['#10B981', '#2DD4BF']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.addGroupGradient}
-            >
-              <Ionicons name="add" size={16} color="#ffffff" />
-              <ThemedText style={styles.addGroupText}>New Group</ThemedText>
-            </LinearGradient>
+            <Ionicons name="add" size={16} color="#ffffff" />
+            <ThemedText style={styles.addGroupText}>New Group</ThemedText>
           </TouchableOpacity>
         </View>
 
@@ -121,25 +118,27 @@ export default function HomeScreen() {
                 activeOpacity={0.8}
                 onPress={() => router.push(`/group/${group.id}`)}
               >
-                <ThemedView style={styles.groupCard}>
+                <View style={styles.groupCard}>
+                  {/* Top icons */}
                   <View style={styles.groupCardHeader}>
-                    <View style={{flexDirection: 'row', alignItems: 'center', gap: 12}}>
-                      <View style={styles.groupIconBox}>
-                        <Ionicons name="calendar-outline" size={24} color="#10B981" />
-                      </View>
-                      <View>
-                        <ThemedText style={styles.groupName}>{group.name}</ThemedText>
-                        <ThemedText style={styles.groupCreatedDate}>Created {group.createdDate}</ThemedText>
-                      </View>
+                    <View style={styles.groupIconBox}>
+                      <Ionicons name="calendar-outline" size={24} color="#35A090" />
                     </View>
-                    <Ionicons name="arrow-forward" size={18} color="#94A3B8" />
+                    <Ionicons name="arrow-forward" size={22} color="#64748B" style={styles.arrowIcon} />
                   </View>
                   
+                  {/* Title and Date stack */}
+                  <View style={styles.groupInfoContainer}>
+                    <ThemedText style={styles.groupName}>{group.name}</ThemedText>
+                    <ThemedText style={styles.groupCreatedDate}>Created {group.createdDate}</ThemedText>
+                  </View>
+                  
+                  {/* Bottom expenses stack */}
                   <View style={styles.groupCardFooter}>
                     <ThemedText style={styles.totalExpensesLabel}>TOTAL EXPENSES</ThemedText>
-                    <ThemedText style={styles.groupExpenditure}>{group.totalExpenditure}</ThemedText>
+                    <ThemedText style={styles.groupExpenditure}>{group.totalExpenditure || '₹0.00'}</ThemedText>
                   </View>
-                </ThemedView>
+                </View>
               </TouchableOpacity>
             ))
           )}
@@ -164,70 +163,81 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   scrollContent: {
-    padding: 16,
+    padding: 20,
     gap: 24,
-    paddingBottom: 100,
+    paddingBottom: 120, // Extra space for the floating bottom pill
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 8,
+  },
+  logoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  logoText: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#1E293B',
   },
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'transparent',
-    paddingHorizontal: 8,
     paddingVertical: 6,
   },
   logoutText: {
     color: '#64748B', 
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '500',
   },
   expenditureBox: {
-    paddingVertical: 52,
-    paddingHorizontal: 28,
-    minHeight: 180,
-    borderRadius: 32,
-    shadowColor: '#10B981',
-    shadowOffset: { width: 0, height: 10 },
+    paddingTop: 36,
+    paddingBottom: 24,
+    paddingHorizontal: 20,
+    borderRadius: 24,
+    alignItems: 'center',
+    shadowColor: '#1C7468',
+    shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.25,
     shadowRadius: 15,
     elevation: 8,
   },
-  expenditureInner: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
   expenditureLabel: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#FFFFFF',
-    marginBottom: 8,
+    marginBottom: 6,
     opacity: 0.9,
     fontWeight: '500',
   },
   expenditureAmount: {
     fontSize: 48,
-    lineHeight: 56,
     fontWeight: '800',
     color: '#ffffff',
     letterSpacing: -1,
   },
   expenditureDate: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#FFFFFF',
-    marginTop: 8,
+    marginTop: 4,
+    marginBottom: 24,
     opacity: 0.8,
   },
+  heroSpacer: {
+    height: 10,
+  },
+  heroIconBoxContainer: {
+    width: '100%',
+    alignItems: 'center',
+  },
   heroIconBox: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    width: 72,
-    height: 72,
-    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    width: 64,
+    height: 64,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -235,83 +245,84 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 4,
   },
   groupsTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '800',
     color: '#1E293B',
   },
   addGroupButton: {
-    shadowColor: '#10B981',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  addGroupGradient: {
     flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    backgroundColor: '#86D4C4',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 8,
     alignItems: 'center',
     gap: 6,
   },
   addGroupText: {
     color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 14,
+    fontWeight: '600',
+    fontSize: 15,
   },
   groupsList: {
     gap: 16,
   },
   groupCard: {
     backgroundColor: '#FFFFFF',
-    padding: 20,
-    borderRadius: 20,
-    shadowColor: '#94a3b8',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 3,
+    padding: 24,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#94A3B8',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   groupCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   groupIconBox: {
-    backgroundColor: '#ECFDF5',
-    padding: 12,
-    borderRadius: 12,
+    backgroundColor: '#E6F4F1',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  arrowIcon: {
+    transform: [{ rotate: '-45deg' }],
+    marginTop: 4,
+  },
+  groupInfoContainer: {
+    marginBottom: 20,
   },
   groupName: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '800',
     color: '#1E293B',
-    marginBottom: 2,
+    marginBottom: 4,
   },
   groupCreatedDate: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#64748B',
   },
   groupCardFooter: {
     alignItems: 'flex-start',
-    backgroundColor: '#F8FAFC',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
   },
   totalExpensesLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '800',
-    color: '#94A3B8',
+    color: '#64748B',
+    marginBottom: 4,
+    letterSpacing: 0.5,
   },
   groupExpenditure: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: '800',
     color: '#1E293B',
   },

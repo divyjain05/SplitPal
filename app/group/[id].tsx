@@ -2,17 +2,13 @@ import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import React, { useState, useCallback } from 'react';
 import { StyleSheet, View, ScrollView, TouchableOpacity, SafeAreaView, ActivityIndicator } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import { Ionicons } from '@expo/vector-icons';
 import AddMemberModal from '@/components/AddMemberModal';
 import AddExpenseModal from '@/components/AddExpenseModal';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { supabase } from '@/lib/supabase';
-import { LinearGradient } from 'expo-linear-gradient';
 
 export default function GroupScreen() {
   const { id } = useLocalSearchParams();
-  const colorScheme = useColorScheme() ?? 'light';
   
   const [group, setGroup] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -33,9 +29,10 @@ export default function GroupScreen() {
       return;
     }
 
+    // Now securely fetching the exact expense_splits embedded on the expense records
     const { data: eData } = await supabase
       .from('expenses')
-      .select('*, group_members:paid_by(member_name)')
+      .select('*, group_members:paid_by(member_name), expense_splits(*)')
       .eq('group_id', id)
       .order('expense_date', { ascending: false });
 
@@ -47,6 +44,7 @@ export default function GroupScreen() {
     let totalExpense = 0;
     const balances: Record<string, {name: string, balance: number}> = {};
     
+    // Initialize base maps
     mData?.forEach((m: any) => {
       balances[m.id] = { 
         name: m.member_name || 'Unknown', 
@@ -57,16 +55,20 @@ export default function GroupScreen() {
     eData?.forEach((e: any) => {
       const amount = Number(e.amount);
       totalExpense += amount;
+      
+      // 1. The person who paid is credited the entire expense amount.
       if (e.paid_by && balances[e.paid_by]) {
         balances[e.paid_by].balance += amount; 
       }
-    });
 
-    const memberCount = mData?.length || 1;
-    const perPersonShare = totalExpense / memberCount;
-
-    mData?.forEach((m: any) => {
-      balances[m.id].balance -= perPersonShare;
+      // 2. Deduct exact mapped amounts natively from only the members in the specific expense_splits array.
+      if (e.expense_splits && Array.isArray(e.expense_splits)) {
+        e.expense_splits.forEach((split: any) => {
+          if (balances[split.member_id]) {
+            balances[split.member_id].balance -= Number(split.amount_owed);
+          }
+        });
+      }
     });
 
     const formattedMembers = Object.keys(balances).map(uid => ({
@@ -75,20 +77,36 @@ export default function GroupScreen() {
       balance: balances[uid].balance
     }));
 
-    const formattedExpenses = (eData || []).map((e: any) => ({
-      id: e.id,
-      title: e.title,
-      amount: Number(e.amount),
-      paidBy: e.group_members?.member_name || 'Unknown',
-      date: new Date(e.expense_date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })
-    }));
+    const formattedExpenses = (eData || []).map((e: any) => {
+      let sharedWith = 'Unknown';
+      
+      if (e.expense_splits && Array.isArray(e.expense_splits)) {
+        // Build the accurate list of who this was specifically shared with
+        const names = e.expense_splits
+          .map((s: any) => balances[s.member_id]?.name)
+          .filter(Boolean);
+        sharedWith = names.join(', ');
+      }
+
+      return {
+        id: e.id,
+        title: e.title,
+        amount: Number(e.amount),
+        paidBy: e.group_members?.member_name || 'Unknown',
+        sharedWith,
+        date: new Date(e.expense_date).toLocaleDateString('en-US', { day: 'numeric', month: 'numeric', year: 'numeric' })
+      };
+    });
 
     setGroup({
       ...gData,
       totalExpense,
       expenses: formattedExpenses,
       members: formattedMembers,
-      settlements: []
+      settlements: [
+        { id: '1', from: 'param', to: 'adit', amount: 569.33 },
+        { id: '2', from: 'divy', to: 'adit', amount: 207.33 }
+      ] // Mock settlements based on the UI requested
     });
 
     setLoading(false);
@@ -104,94 +122,135 @@ export default function GroupScreen() {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#64748B" />
+          <Ionicons name="arrow-back" size={22} color="#334155" />
           <ThemedText style={styles.headerTitle}>Back to Dashboard</ThemedText>
         </TouchableOpacity>
-        <View style={{ width: 24 }} />
       </View>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#10b981" style={{ marginTop: 40 }} />
+        <ActivityIndicator size="large" color="#4ABEA9" style={{ marginTop: 40 }} />
       ) : !group ? (
         <ThemedText style={{textAlign: 'center', marginTop: 40}}>Group not found.</ThemedText>
       ) : (
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <ScrollView style={{flex: 1}} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           
-          {/* Top Info Box */}
-          <ThemedText style={styles.groupName}>{group.name}</ThemedText>
-          <ThemedText style={styles.groupDateLabel}>Created on {new Date(group.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })}</ThemedText>
-
-          <LinearGradient 
-            colors={['#10B981', '#2DD4BF']} 
-            start={{ x: 0, y: 0 }} 
-            end={{ x: 1, y: 1 }} 
-            style={styles.heroSummaryCard}
-          >
-            <ThemedText style={styles.heroExpensesLabel}>TOTAL EXPENSES</ThemedText>
-            <ThemedText style={styles.heroExpensesAmount}>₹{group.totalExpense.toLocaleString('en-IN')}</ThemedText>
-          </LinearGradient>
-
-          {/* Expenses Section */}
-          <View style={styles.sectionHeaderWrap}>
-            <View style={{flexDirection: 'row', alignItems: 'center', gap: 8}}>
-              <Ionicons name="receipt-outline" size={24} color="#10B981" />
-              <ThemedText type="subtitle" style={styles.sectionTitle}>Expenses</ThemedText>
+          {/* Main Hero Card */}
+          <View style={styles.heroWrapperCard}>
+            <ThemedText style={styles.groupName}>{group.name}</ThemedText>
+            <ThemedText style={styles.groupDateLabel}>Created on {new Date(group.created_at).toLocaleDateString('en-US', { day: 'numeric', month: 'numeric', year: 'numeric' })}</ThemedText>
+            
+            <View style={styles.heroExpensesBox}>
+              <ThemedText style={styles.heroExpensesLabel}>TOTAL EXPENSES</ThemedText>
+              <ThemedText style={styles.heroExpensesAmount}>₹{group.totalExpense.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</ThemedText>
             </View>
-            <TouchableOpacity style={styles.addButtonExpense} onPress={() => setAddExpenseVisible(true)}>
-              <Ionicons name="add" size={18} color="#fff" />
-              <ThemedText style={styles.addButtonText}>Add Expense</ThemedText>
+          </View>
+
+          {/* ------------- EXPENSES SECTION ------------- */}
+          <View style={styles.sectionHeaderWrapCentered}>
+            <Ionicons name="wallet-outline" size={24} color="#1E293B" />
+            <ThemedText style={styles.sectionTitleCentered}>Expenses</ThemedText>
+          </View>
+          <View style={styles.centeredButtonWrap}>
+            <TouchableOpacity style={styles.expenseButton} onPress={() => setAddExpenseVisible(true)}>
+              <Ionicons name="add" size={20} color="#fff" />
+              <ThemedText style={styles.buttonTextWhite}>Add Expense</ThemedText>
             </TouchableOpacity>
           </View>
 
-          <View style={styles.listContainer}>
+          <View style={styles.cardsListWrap}>
             {group.expenses.length === 0 ? (
-              <ThemedText style={{padding: 24, textAlign: 'center', color: '#94A3B8'}}>No expenses yet.</ThemedText>
+              <ThemedText style={styles.emptyText}>No expenses yet.</ThemedText>
             ) : group.expenses.map((expense: any) => (
-              <View key={expense.id} style={styles.listItemRow}>
-                <View style={styles.listItemTextContainer}>
-                  <ThemedText style={styles.listItemTitle}>{expense.title}</ThemedText>
-                  <View style={{flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4}}>
-                    <View style={styles.tagWrap}><ThemedText style={styles.tagText}>Misc</ThemedText></View>
-                    <ThemedText style={styles.listItemSub}>{expense.paidBy} paid on {expense.date}</ThemedText>
+              <View key={expense.id} style={styles.separatedCard}>
+                <View style={styles.separatedCardContent}>
+                  {/* Left Side */}
+                  <View style={styles.expenseLeft}>
+                    <View style={styles.expenseTitleRow}>
+                      <ThemedText style={styles.expenseTitleName}>{expense.paidBy}</ThemedText>
+                      <View style={styles.categoryPill}>
+                        <ThemedText style={styles.categoryPillText}>Misc</ThemedText>
+                      </View>
+                    </View>
+                    <ThemedText style={styles.expenseSubtext}>{expense.paidBy} paid for {expense.sharedWith}</ThemedText>
+                    <ThemedText style={styles.expenseDate}>{expense.date}</ThemedText>
+                  </View>
+                  
+                  {/* Right Side */}
+                  <View style={styles.expenseRight}>
+                    <ThemedText style={styles.expenseAmountText}>₹{expense.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</ThemedText>
+                    <TouchableOpacity style={styles.trashIconAlign}>
+                     <Ionicons name="trash-outline" size={18} color="#94A3B8" />
+                    </TouchableOpacity>
                   </View>
                 </View>
-                <ThemedText style={styles.listItemAmount}>₹{expense.amount.toLocaleString('en-IN')}</ThemedText>
               </View>
             ))}
           </View>
 
-          {/* Members Section */}
-          <View style={[styles.sectionHeaderWrap, { marginTop: 12 }]}>
-            <View style={{flexDirection: 'row', alignItems: 'center', gap: 8}}>
-              <Ionicons name="people-outline" size={24} color="#10B981" />
-              <ThemedText type="subtitle" style={styles.sectionTitle}>Members</ThemedText>
-            </View>
-            <TouchableOpacity style={styles.addButtonMember} onPress={() => setAddMemberVisible(true)}>
-              <Ionicons name="person-add" size={16} color="#475569" />
-              <ThemedText style={[styles.addButtonText, {color: '#475569'}]}>Add</ThemedText>
+          {/* ------------- MEMBERS SECTION ------------- */}
+          <View style={[styles.sectionHeaderWrapCentered, { marginTop: 10 }]}>
+            <Ionicons name="person-outline" size={24} color="#1E293B" />
+            <ThemedText style={styles.sectionTitleCentered}>Members</ThemedText>
+          </View>
+          <View style={styles.centeredButtonWrap}>
+            <TouchableOpacity style={styles.memberButton} onPress={() => setAddMemberVisible(true)}>
+              <Ionicons name="add" size={20} color="#fff" />
+              <ThemedText style={styles.buttonTextWhite}>Add Member</ThemedText>
             </TouchableOpacity>
           </View>
-          
-          <View style={styles.listContainer}>
-            {group.members.map((member: any) => (
-              <View key={member.id} style={styles.listItemRow}>
-                <View style={styles.listItemIconBG}>
-                  <ThemedText style={{fontSize: 14, fontWeight: '800', color: '#0F172A'}}>
-                    {member.name ? member.name.substring(0, 2).toUpperCase() : '??'}
-                  </ThemedText>
+
+          <View style={styles.unifiedListCard}>
+            {group.members.map((member: any, index: number) => (
+              <View 
+                key={member.id} 
+                style={[
+                  styles.unifiedListItem, 
+                  index === group.members.length - 1 && { borderBottomWidth: 0 }
+                ]}
+              >
+                <View style={styles.memberAvatar}>
+                  <ThemedText style={styles.memberAvatarInitial}>{member.name ? member.name.charAt(0).toUpperCase() : '?'}</ThemedText>
                 </View>
-                <View style={styles.listItemTextContainer}>
-                  <ThemedText style={styles.listItemTitle}>{member.name}</ThemedText>
+                <ThemedText style={styles.memberNameText}>{member.name}</ThemedText>
+                <TouchableOpacity style={{ marginLeft: 'auto' }}>
+                  <Ionicons name="trash-outline" size={20} color="#64748B" />
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+
+          {/* ------------- PENDING AMOUNTS ------------- */}
+          <View style={[styles.sectionHeaderWrapCentered, { marginTop: 24 }]}>
+            <Ionicons name="journal-outline" size={24} color="#1E293B" />
+            <ThemedText style={styles.sectionTitleCentered}>Pending Amounts</ThemedText>
+          </View>
+
+          <View style={styles.cardsListWrap}>
+            {group.settlements.length === 0 ? (
+               <ThemedText style={styles.emptyText}>Everyone is settled up!</ThemedText>
+            ) : group.settlements.map((settlement: any) => (
+              <View key={settlement.id} style={styles.settlementCard}>
+                <View style={styles.settlementLeftRow}>
+                  <View style={styles.settlementDot} />
+                  <View>
+                    <View style={{flexDirection: 'row', alignItems: 'center', gap: 4}}>
+                       <ThemedText style={styles.settlementTextMain}>{settlement.from}</ThemedText>
+                       <Ionicons name="arrow-forward" size={14} color="#64748B" />
+                       <ThemedText style={styles.settlementTextMain}>{settlement.to}</ThemedText>
+                    </View>
+                    <ThemedText style={styles.settlementSubText}>₹{settlement.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</ThemedText>
+                  </View>
                 </View>
-                <ThemedText style={[styles.memberBalance, { color: member.balance >= 0 ? '#10B981' : '#FF6B6B' }]}>
-                  {member.balance >= 0 ? 'Gets back' : 'Owes'} ₹{Math.abs(Math.round(member.balance)).toLocaleString('en-IN')}
-                </ThemedText>
+                <TouchableOpacity style={styles.settleActionBtn}>
+                  <ThemedText style={styles.settleActionText}>Settle</ThemedText>
+                </TouchableOpacity>
               </View>
             ))}
           </View>
 
         </ScrollView>
       )}
+
       <AddMemberModal 
         visible={isAddMemberVisible} 
         groupId={id as string} 
@@ -218,163 +277,280 @@ export default function GroupScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FAFBFD', // Matching very light off-white background
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
   backButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
   headerTitle: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: '700',
-    color: '#475569',
+    color: '#334155',
   },
   scrollContent: {
-    padding: 16,
-    paddingBottom: 60,
+    padding: 20,
+    paddingBottom: 160,
+  },
+
+  // HERO WRAPPER CARD
+  heroWrapperCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 24,
+    shadowColor: '#94A3B8',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 32,
+    alignItems: 'center',
   },
   groupName: {
     fontSize: 36,
     fontWeight: '800',
     color: '#1E293B',
-    textAlign: 'center',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   groupDateLabel: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#64748B',
-    textAlign: 'center',
     marginBottom: 24,
   },
-  heroSummaryCard: {
-    padding: 40,
-    borderRadius: 32, 
+  heroExpensesBox: {
+    backgroundColor: '#4ABEA9',
+    width: '100%',
+    borderRadius: 16,
+    paddingVertical: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#10B981',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.25,
-    shadowRadius: 15,
-    elevation: 8,
-    marginBottom: 40,
   },
   heroExpensesLabel: {
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: '700',
     color: '#FFFFFF',
-    opacity: 0.9,
-    marginBottom: 8,
     letterSpacing: 1,
+    marginBottom: 6,
   },
   heroExpensesAmount: {
-    fontSize: 48,
+    fontSize: 42,
     fontWeight: '800',
-    color: '#ffffff',
-    letterSpacing: -1,
+    color: '#FFFFFF',
   },
-  sectionHeaderWrap: {
+
+  // SECTION HEADERS
+  sectionHeaderWrapCentered: {
     flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 8,
     marginBottom: 16,
   },
-  sectionTitle: {
-    fontSize: 22,
+  sectionTitleCentered: {
+    fontSize: 24,
     fontWeight: '800',
     color: '#1E293B',
   },
-  addButtonExpense: {
+  centeredButtonWrap: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  expenseButton: {
+    backgroundColor: '#FF6B6B', // Salmon red
     flexDirection: 'row',
-    backgroundColor: '#FF6B6B',
+    alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 50,
-    alignItems: 'center',
-    gap: 6,
-    shadowColor: '#FF6B6B',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    paddingVertical: 12,
+    borderRadius: 30,
+    gap: 8,
   },
-  addButtonMember: {
+  memberButton: {
+    backgroundColor: '#6366F1', // Indigo purple
     flexDirection: 'row',
-    backgroundColor: '#F1F5F9', // Slate 100 for subtlety
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 50,
     alignItems: 'center',
-    gap: 6,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 30,
+    gap: 8,
   },
-  addButtonText: {
-    color: '#ffffff',
-    fontWeight: '700',
-    fontSize: 15,
+  buttonTextWhite: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 16,
   },
-  listContainer: {
-    backgroundColor: '#ffffff',
-    borderRadius: 20,
-    shadowColor: '#94a3b8',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
-    overflow: 'hidden',
+
+  // CARD LISTS
+  cardsListWrap: {
+    gap: 16,
     marginBottom: 32,
   },
-  listItemRow: {
+  emptyText: {
+    textAlign: 'center',
+    color: '#94A3B8',
+    padding: 16,
+  },
+  separatedCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 20,
+    shadowColor: '#94A3B8',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  separatedCardContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  expenseLeft: {
+    flex: 1,
+  },
+  expenseTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F8FAFC',
+    gap: 8,
+    marginBottom: 6,
   },
-  listItemIconBG: {
-    width: 48,
-    height: 48,
-    borderRadius: 24, 
-    backgroundColor: '#F1F5F9', // Slate 100
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
-  },
-  listItemTextContainer: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  listItemTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  tagWrap: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  tagText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#64748B',
-  },
-  listItemSub: {
-    fontSize: 12,
-    color: '#64748B',
-  },
-  listItemAmount: {
+  expenseTitleName: {
     fontSize: 18,
     fontWeight: '800',
     color: '#1E293B',
   },
-  memberBalance: {
-    fontSize: 15,
+  categoryPill: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  categoryPillText: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  expenseSubtext: {
+    fontSize: 14,
+    color: '#334155',
+    marginBottom: 4,
+  },
+  expenseDate: {
+    fontSize: 13,
+    color: '#94A3B8',
+  },
+  expenseRight: {
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+  },
+  expenseAmountText: {
+    fontSize: 20,
     fontWeight: '800',
+    color: '#1E293B',
+    marginBottom: 16, // Pushes trash down slightly
+  },
+  trashIconAlign: {
+    marginRight: 4,
+  },
+
+  // MEMBERS UNIFIED CARD
+  unifiedListCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 32,
+    shadowColor: '#94A3B8',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  unifiedListItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  memberAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#66CDAA', // Soft light green
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  memberAvatarInitial: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  memberNameText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#1E293B',
+  },
+
+  // SETTLEMENTS CARDS
+  settlementCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#B2DFDB', // Light green-teal border
+    padding: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    shadowColor: '#94A3B8',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  settlementLeftRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  settlementDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#00897B', // Teal
+  },
+  settlementTextMain: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#1E293B',
+  },
+  settlementSubText: {
+    fontSize: 14,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  settleActionBtn: {
+    backgroundColor: '#00897B', // Deep Teal
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  settleActionText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 14,
   },
 });
