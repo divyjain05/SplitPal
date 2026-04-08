@@ -85,7 +85,7 @@ export default function HomeScreen() {
               <ThemedText style={styles.expenditureDate}>March 2026</ThemedText>
             </View>
             <View style={styles.heroIconBox}>
-              <Ionicons name="wallet-outline" size={32} color="#ffffff" />
+              <Ionicons name="wallet-outline" size={38} color="#ffffff" />
             </View>
           </View>
         </LinearGradient>
@@ -188,7 +188,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   expenditureBox: {
-    padding: 24,
+    paddingVertical: 52,
+    paddingHorizontal: 28,
+    minHeight: 180,
     borderRadius: 32,
     shadowColor: '#10B981',
     shadowOffset: { width: 0, height: 10 },
@@ -202,29 +204,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   expenditureLabel: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#FFFFFF',
-    marginBottom: 4,
+    marginBottom: 8,
     opacity: 0.9,
     fontWeight: '500',
   },
   expenditureAmount: {
-    fontSize: 42,
+    fontSize: 48,
+    lineHeight: 56,
     fontWeight: '800',
     color: '#ffffff',
     letterSpacing: -1,
   },
   expenditureDate: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#FFFFFF',
-    marginTop: 4,
+    marginTop: 8,
     opacity: 0.8,
   },
   heroIconBox: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    width: 64,
-    height: 64,
-    borderRadius: 20,
+    width: 72,
+    height: 72,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
