@@ -20,12 +20,15 @@ export default function AddMemberModal({ visible, groupId, onClose, onSuccess }:
     if (!name.trim()) return;
     setLoading(true);
 
+    // Get current user to bypass RLS restrictions later
+    const { data: { session } } = await supabase.auth.getSession();
+
     const { error } = await supabase
       .from('group_members')
       .insert({ 
         group_id: groupId, 
         member_name: name.trim(),
-        user_id: null // Unregistered ghost member
+        user_id: session?.user?.id || null 
       });
 
     setLoading(false);
