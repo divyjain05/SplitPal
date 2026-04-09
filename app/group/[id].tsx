@@ -1,6 +1,6 @@
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import React, { useState, useCallback } from 'react';
-import { StyleSheet, View, ScrollView, TouchableOpacity, SafeAreaView, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, ScrollView, TouchableOpacity, SafeAreaView, ActivityIndicator, Alert } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Ionicons } from '@expo/vector-icons';
 import AddMemberModal from '@/components/AddMemberModal';
@@ -112,6 +112,39 @@ export default function GroupScreen() {
     setLoading(false);
   };
 
+  const handleDeleteMember = (memberId: string, memberName: string) => {
+    Alert.alert(
+      "Remove Member",
+      `Are you sure you want to remove ${memberName} from this group?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Remove", 
+          style: "destructive",
+          onPress: async () => {
+            setLoading(true);
+            const { data, error } = await supabase
+              .from('group_members')
+              .delete()
+              .eq('id', memberId)
+              .select();
+
+            if (error) {
+              console.error('Error deleting member:', error);
+              Alert.alert('Action Blocked', `Database error: ${error.message}`);
+              setLoading(false);
+            } else if (!data || data.length === 0) {
+              Alert.alert('Action Blocked', "You don't have permission to remove this member, or they don't exist.");
+              setLoading(false);
+            } else {
+              fetchGroupDetails(); // This resets loading state
+            }
+          }
+        }
+      ]
+    );
+  };
+
   useFocusEffect(
     useCallback(() => {
       fetchGroupDetails();
@@ -212,7 +245,10 @@ export default function GroupScreen() {
                   <ThemedText style={styles.memberAvatarInitial}>{member.name ? member.name.charAt(0).toUpperCase() : '?'}</ThemedText>
                 </View>
                 <ThemedText style={styles.memberNameText}>{member.name}</ThemedText>
-                <TouchableOpacity style={{ marginLeft: 'auto' }}>
+                <TouchableOpacity 
+                  style={{ marginLeft: 'auto' }}
+                  onPress={() => handleDeleteMember(member.id, member.name)}
+                >
                   <Ionicons name="trash-outline" size={20} color="#64748B" />
                 </TouchableOpacity>
               </View>

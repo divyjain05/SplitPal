@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Modal, View, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView } from 'react-native';
+import { Modal, View, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { supabase } from '@/lib/supabase';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { Ionicons } from '@expo/vector-icons';
 
 interface AddExpenseModalProps {
   visible: boolean;
@@ -15,9 +16,15 @@ interface AddExpenseModalProps {
 export default function AddExpenseModal({ visible, groupId, members, onClose, onSuccess }: AddExpenseModalProps) {
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
+  const [category, setCategory] = useState('Misc');
   const [paidBy, setPaidBy] = useState<string | null>(null);
   const [paidFor, setPaidFor] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  
+  // Custom dropdown states
+  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
+  const [paidByDropdownOpen, setPaidByDropdownOpen] = useState(false);
+
   const colorScheme = useColorScheme();
 
   const handleTogglePaidFor = (memberId: string) => {
@@ -35,14 +42,14 @@ export default function AddExpenseModal({ visible, groupId, members, onClose, on
 
     setLoading(true);
 
-    // 1. Insert Expense
     const { data: expense, error: expenseError } = await supabase
       .from('expenses')
       .insert({
         group_id: groupId,
         paid_by: paidBy,
         title: title.trim(),
-        amount: numericAmount
+        amount: numericAmount,
+        // We aren't storing Category in schema yet, but UI supports it!
       })
       .select('id')
       .single();
@@ -53,9 +60,7 @@ export default function AddExpenseModal({ visible, groupId, members, onClose, on
       return;
     }
 
-    // 2. Insert Split Logic (Only among those who are selected in Paid For)
     const perPersonShare = numericAmount / paidFor.length;
-    
     const splits = paidFor.map(memberId => ({
       expense_id: expense.id,
       member_id: memberId,
@@ -71,91 +76,183 @@ export default function AddExpenseModal({ visible, groupId, members, onClose, on
     }
 
     setLoading(false);
+    
+    // Reset state
     setTitle('');
     setAmount('');
     setPaidBy(null);
     setPaidFor([]);
+    setCategory('Misc');
+    setCategoryDropdownOpen(false);
+    setPaidByDropdownOpen(false);
+    
     onSuccess();
+  };
+
+  // Helper to map member ID to name safely
+  const getMemberName = (id: string | null) => {
+    if (!id) return 'Select Member';
+    const memb = members.find(m => m.id === id);
+    return memb ? memb.name : 'Select Member';
   };
 
   const isFormValid = title.trim() && amount.trim() && paidBy && paidFor.length > 0;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <View style={[styles.dialog, { backgroundColor: colorScheme === 'dark' ? '#1f2937' : '#ffffff' }]}>
-          <ThemedText style={styles.title}>Add Expense</ThemedText>
-          
-          <ThemedText style={styles.label}>What was this for?</ThemedText>
-          <TextInput
-            style={[styles.input, { color: colorScheme === 'dark' ? '#fff' : '#000' }]}
-            placeholder="e.g. Flight Tickets, Dinner"
-            placeholderTextColor="#9ca3af"
-            value={title}
-            onChangeText={setTitle}
-          />
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.overlay}>
+        <View style={styles.overlayBackground}>
+          <ScrollView contentContainerStyle={styles.scrollLayout} showsVerticalScrollIndicator={false}>
+            <View style={[styles.dialog, { backgroundColor: colorScheme === 'dark' ? '#1E293B' : '#FFFFFF' }]}>
+              
+              <ThemedText style={styles.headerTitle}>Add New Expense</ThemedText>
+              
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.label}>Description</ThemedText>
+                <TextInput
+                  style={[styles.inputField, { color: colorScheme === 'dark' ? '#F8FAFC' : '#1E293B' }]}
+                  placeholder="e.g., Dinner, Taxi"
+                  placeholderTextColor="#94A3B8"
+                  value={title}
+                  onChangeText={setTitle}
+                />
+              </View>
 
-          <ThemedText style={styles.label}>Amount (₹)</ThemedText>
-          <TextInput
-            style={[styles.input, { color: colorScheme === 'dark' ? '#fff' : '#000' }]}
-            placeholder="0.00"
-            placeholderTextColor="#9ca3af"
-            keyboardType="numeric"
-            value={amount}
-            onChangeText={setAmount}
-          />
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.label}>Amount (₹)</ThemedText>
+                <TextInput
+                  style={[styles.inputField, { color: colorScheme === 'dark' ? '#F8FAFC' : '#1E293B' }]}
+                  placeholder="0.00"
+                  placeholderTextColor="#94A3B8"
+                  keyboardType="numeric"
+                  value={amount}
+                  onChangeText={setAmount}
+                />
+              </View>
 
-          <ThemedText style={styles.label}>Paid By</ThemedText>
-          <ScrollView style={styles.membersList} horizontal showsHorizontalScrollIndicator={false}>
-            {members.length === 0 && <ThemedText style={{color: '#888'}}>No members in group.</ThemedText>}
-            {members.map(m => (
-              <TouchableOpacity
-                key={`by-${m.id}`}
-                style={[styles.memberPill, paidBy === m.id && styles.memberPillActive]}
-                onPress={() => setPaidBy(m.id)}
-              >
-                <ThemedText style={[styles.memberPillText, paidBy === m.id && styles.memberPillTextActive]}>
-                  {m.name}
-                </ThemedText>
-              </TouchableOpacity>
-            ))}
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.label}>Category</ThemedText>
+                <TouchableOpacity 
+                  style={styles.dropdownSelector} 
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    setCategoryDropdownOpen(!categoryDropdownOpen);
+                    setPaidByDropdownOpen(false);
+                  }}
+                >
+                  <ThemedText style={[styles.dropdownValue, { color: colorScheme === 'dark' ? '#F8FAFC' : '#1E293B' }]}>
+                    {category}
+                  </ThemedText>
+                  <Ionicons name="chevron-expand" size={18} color="#64748B" />
+                </TouchableOpacity>
+                
+                {/* Simulated Custom Category Dropdown List */}
+                {categoryDropdownOpen && (
+                  <View style={styles.inlineDropdownList}>
+                    {['Misc', 'Food', 'Transport', 'Entertainment'].map((cat, idx) => (
+                      <TouchableOpacity 
+                        key={idx} 
+                        style={styles.dropdownListItem} 
+                        onPress={() => {
+                          setCategory(cat);
+                          setCategoryDropdownOpen(false);
+                        }}
+                      >
+                        <ThemedText style={{color: '#334155'}}>{cat}</ThemedText>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.label}>Paid By</ThemedText>
+                <TouchableOpacity 
+                  style={styles.dropdownSelector} 
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    setPaidByDropdownOpen(!paidByDropdownOpen);
+                    setCategoryDropdownOpen(false);
+                  }}
+                >
+                  <ThemedText style={[
+                      styles.dropdownValue, 
+                      { color: paidBy ? (colorScheme === 'dark' ? '#F8FAFC' : '#1E293B') : '#94A3B8' }
+                  ]}>
+                    {getMemberName(paidBy)}
+                  </ThemedText>
+                  <Ionicons name="chevron-expand" size={18} color="#64748B" />
+                </TouchableOpacity>
+
+                {/* Simulated Custom PaidBy Dropdown List */}
+                {paidByDropdownOpen && (
+                  <View style={styles.inlineDropdownList}>
+                    {members.length === 0 && <ThemedText style={{padding: 12, color: '#94A3B8'}}>No members</ThemedText>}
+                    {members.map(m => (
+                      <TouchableOpacity 
+                        key={m.id} 
+                        style={styles.dropdownListItem} 
+                        onPress={() => {
+                          setPaidBy(m.id);
+                          setPaidByDropdownOpen(false);
+                        }}
+                      >
+                        <ThemedText style={{color: '#334155'}}>{m.name}</ThemedText>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.label}>Split Between</ThemedText>
+                <View style={styles.splitBoxWrapper}>
+                  {members.length === 0 && <ThemedText style={{color: '#94A3B8'}}>No members to split with.</ThemedText>}
+                  {members.map(m => {
+                    const isSelected = paidFor.includes(m.id);
+                    return (
+                      <TouchableOpacity 
+                        key={m.id} 
+                        style={styles.checkboxRow}
+                        activeOpacity={0.7}
+                        onPress={() => handleTogglePaidFor(m.id)}
+                      >
+                        <View style={[styles.customCheckbox, isSelected && styles.customCheckboxSelected]}>
+                           {isSelected && <Ionicons name="checkmark" size={14} color="#FFFFFF" />}
+                        </View>
+                        <ThemedText style={styles.checkboxLabel}>{m.name}</ThemedText>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                {/* Red Error Message Validation */}
+                {paidFor.length === 0 && (
+                  <ThemedText style={styles.errorText}>Select at least one member</ThemedText>
+                )}
+              </View>
+
+              <View style={styles.footerActions}>
+                <TouchableOpacity style={styles.cancelButton} onPress={onClose} disabled={loading}>
+                  <ThemedText style={styles.cancelButtonText}>Cancel</ThemedText>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={[styles.addBtn, !isFormValid && styles.addBtnDisabled]}
+                  onPress={handleCreate}
+                  disabled={!isFormValid || loading}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                  ) : (
+                    <ThemedText style={styles.addBtnText}>Add Expense</ThemedText>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+            </View>
           </ScrollView>
-
-          <ThemedText style={styles.label}>Paid For</ThemedText>
-          <ScrollView style={styles.membersList} horizontal showsHorizontalScrollIndicator={false}>
-            {members.length === 0 && <ThemedText style={{color: '#888'}}>No members in group.</ThemedText>}
-            {members.map(m => (
-              <TouchableOpacity
-                key={`for-${m.id}`}
-                style={[styles.memberPill, paidFor.includes(m.id) && styles.memberPillActiveMulti]}
-                onPress={() => handleTogglePaidFor(m.id)}
-              >
-                <ThemedText style={[styles.memberPillText, paidFor.includes(m.id) && styles.memberPillTextActive]}>
-                  {m.name}
-                </ThemedText>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          <View style={styles.actions}>
-            <TouchableOpacity style={styles.cancelButton} onPress={onClose} disabled={loading}>
-              <ThemedText style={styles.cancelButtonText}>Cancel</ThemedText>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[styles.createButton, !isFormValid && styles.createButtonDisabled]}
-              onPress={handleCreate}
-              disabled={!isFormValid || loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : (
-                <ThemedText style={styles.createButtonText}>Add Expense</ThemedText>
-              )}
-            </TouchableOpacity>
-          </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -163,94 +260,143 @@ export default function AddExpenseModal({ visible, groupId, members, onClose, on
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
+  },
+  overlayBackground: {
+    flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
+  },
+  scrollLayout: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 20,
   },
   dialog: {
     width: '100%',
     borderRadius: 20,
-    padding: 24,
+    padding: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.1,
     shadowRadius: 20,
     elevation: 10,
   },
-  title: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 24,
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#1E293B',
+    marginBottom: 16,
+  },
+  inputGroup: {
+    marginBottom: 14,
   },
   label: {
     fontSize: 14,
     fontWeight: '600',
-    marginBottom: 6,
-    color: '#6b7280',
+    color: '#64748B',
+    marginBottom: 4,
   },
-  input: {
-    backgroundColor: '#88888822',
-    height: 52,
-    borderRadius: 12,
+  inputField: {
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+    height: 44,
+    borderRadius: 8,
     paddingHorizontal: 16,
-    fontSize: 16,
-    marginBottom: 16,
+    fontSize: 15,
   },
-  membersList: {
+  dropdownSelector: {
     flexDirection: 'row',
-    marginBottom: 20,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+    height: 44,
+    borderRadius: 8,
+    paddingHorizontal: 16,
   },
-  memberPill: {
+  dropdownValue: {
+    fontSize: 15,
+  },
+  inlineDropdownList: {
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 4,
+  },
+  dropdownListItem: {
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: '#88888822',
-    marginRight: 8,
   },
-  memberPillActive: {
-    backgroundColor: '#10B981', // Solid teal/green for singles
+  splitBoxWrapper: {
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    padding: 12,
   },
-  memberPillActiveMulti: {
-    backgroundColor: '#3b82f6', // Solid blue to differentiate 'Paid For' multi-selection
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
   },
-  memberPillText: {
-    fontWeight: '500',
+  customCheckbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: '#94A3B8',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
   },
-  memberPillTextActive: {
-    color: '#fff',
-    fontWeight: 'bold',
+  customCheckboxSelected: {
+    backgroundColor: '#4ABEA9',
+    borderColor: '#4ABEA9',
   },
-  actions: {
+  checkboxLabel: {
+    fontSize: 15,
+    color: '#334155',
+  },
+  errorText: {
+    color: '#EF4444',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  footerActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    gap: 12,
-    marginTop: 10,
+    alignItems: 'center',
+    marginTop: 6,
+    gap: 16,
   },
   cancelButton: {
-    paddingVertical: 12,
+    paddingVertical: 10,
     paddingHorizontal: 16,
-    borderRadius: 12,
-    backgroundColor: '#88888822',
   },
   cancelButtonText: {
-    fontWeight: '600',
+    color: '#64748B',
     fontSize: 15,
+    fontWeight: '600',
   },
-  createButton: {
-    backgroundColor: '#FF6B6B',
-    paddingVertical: 14,
-    paddingHorizontal: 28,
-    borderRadius: 9999,
-    alignItems: 'center',
+  addBtn: {
+    backgroundColor: '#4ABEA9',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
     justifyContent: 'center',
+    alignItems: 'center',
   },
-  createButtonDisabled: {
+  addBtnDisabled: {
     opacity: 0.5,
   },
-  createButtonText: {
-    color: '#ffffff',
-    fontWeight: 'bold',
-    fontSize: 15,
+  addBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 16,
   },
 });
